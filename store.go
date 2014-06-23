@@ -42,7 +42,7 @@ var (
 	idxHdr = "github.com/kjk/contentstore header 1.0"
 )
 
-type Blob struct {
+type blob struct {
 	sha1     [20]byte
 	nSegment int
 	offset   int
@@ -53,7 +53,7 @@ type Store struct {
 	sync.Mutex
 	basePath       string
 	maxSegmentSize int
-	blobs          []Blob
+	blobs          []blob
 	// sha1ToBlob is to quickly find
 	// string is really [20]byte cast to string and int is a position within blobs array
 	// Note: we could try to be a bit smarter about how we
@@ -77,7 +77,7 @@ func segmentFilePath(basePath string, nSegment int) string {
 	return fmt.Sprintf("%s_%d.txt", basePath, nSegment)
 }
 
-func decodeIndexLine(rec []string) (blob Blob, err error) {
+func decodeIndexLine(rec []string) (blob blob, err error) {
 	if len(rec) != 4 {
 		return blob, errInvalidIndexLine
 	}
@@ -113,7 +113,7 @@ func appendIntIfNotExists(aPtr *[]int, x int) {
 }
 
 // TODO: error out if already in sha1ToBlobNo
-func (store *Store) appendBlob(blob Blob) {
+func (store *Store) appendBlob(blob blob) {
 	sha1 := string(blob.sha1[:])
 	blobNo := len(store.blobs)
 	store.blobs = append(store.blobs, blob)
@@ -163,10 +163,10 @@ func (store *Store) readIndex() error {
 	return nil
 }
 
-func NewStoreWithLimit(basePath string, maxSegmentSize int) (store *Store, err error) {
+func NewWithLimit(basePath string, maxSegmentSize int) (store *Store, err error) {
 	store = &Store{
 		basePath:        basePath,
-		blobs:           make([]Blob, 0),
+		blobs:           make([]blob, 0),
 		sha1ToBlobNo:    make(map[string]int),
 		maxSegmentSize:  maxSegmentSize,
 		cachedSegmentNo: -1,
@@ -213,8 +213,8 @@ func NewStoreWithLimit(basePath string, maxSegmentSize int) (store *Store, err e
 	return store, nil
 }
 
-func NewStore(basePath string) (*Store, error) {
-	return NewStoreWithLimit(basePath, 10*1024*1024)
+func New(basePath string) (*Store, error) {
+	return NewWithLimit(basePath, 10*1024*1024)
 }
 
 func closeFilePtr(filePtr **os.File) (err error) {
@@ -232,7 +232,7 @@ func (store *Store) Close() {
 	closeFilePtr(&store.cachedSegmentFile)
 }
 
-func writeBlobRec(csvWriter *csv.Writer, blob *Blob) error {
+func writeBlobRec(csvWriter *csv.Writer, blob *blob) error {
 	sha1Str := hex.EncodeToString(blob.sha1[:])
 	rec := [][]string{
 		{
@@ -253,7 +253,7 @@ func (store *Store) Put(d []byte) (id string, err error) {
 	if _, ok := store.sha1ToBlobNo[id]; ok {
 		return id, nil
 	}
-	blob := Blob{
+	blob := blob{
 		size:     len(d),
 		offset:   store.currSegmentSize,
 		nSegment: store.currSegmentNo,

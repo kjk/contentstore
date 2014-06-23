@@ -92,9 +92,9 @@ func TestStore(t *testing.T) {
 	rnd := rand.New(rand.NewSource(0))
 	basePath := "test"
 	removeStoreFiles(basePath)
-	store, err := NewStoreWithLimit(basePath, SEGMENT_MAX_SIZE)
+	store, err := NewWithLimit(basePath, SEGMENT_MAX_SIZE)
 	if err != nil {
-		t.Fatalf("NewStoreWithLimit(%q, %d) failed with %q", basePath, SEGMENT_MAX_SIZE, err)
+		t.Fatalf("NewWithLimit(%q, %d) failed with %q", basePath, SEGMENT_MAX_SIZE, err)
 	}
 	defer func() {
 		if store != nil {
@@ -105,9 +105,9 @@ func TestStore(t *testing.T) {
 	testGet(t, store, rnd, blobIds)
 	store.Close()
 	store = nil
-	store, err = NewStoreWithLimit(basePath, SEGMENT_MAX_SIZE)
+	store, err = NewWithLimit(basePath, SEGMENT_MAX_SIZE)
 	if err != nil {
-		t.Fatalf("NewStoreWithLimit(%q, %d) failed with %q", basePath, SEGMENT_MAX_SIZE, err)
+		t.Fatalf("NewWithLimit(%q, %d) failed with %q", basePath, SEGMENT_MAX_SIZE, err)
 	}
 	testGet(t, store, rnd, blobIds)
 	// TODO: add new items
