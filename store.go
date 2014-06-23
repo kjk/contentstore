@@ -112,6 +112,14 @@ func appendIntIfNotExists(aPtr *[]int, x int) {
 	*aPtr = a
 }
 
+// TODO: error out if already in sha1ToBlobNo
+func (store *Store) appendBlob(blob Blob) {
+	sha1 := string(blob.sha1[:])
+	blobNo := len(store.blobs)
+	store.blobs = append(store.blobs, blob)
+	store.sha1ToBlobNo[sha1] = blobNo
+}
+
 func (store *Store) readIndex() error {
 	// at this point idx file must exist
 	fidx, err := os.Open(idxFilePath(store.basePath))
@@ -138,7 +146,7 @@ func (store *Store) readIndex() error {
 			break
 		}
 		appendIntIfNotExists(&segments, blob.nSegment)
-		store.blobs = append(store.blobs, blob)
+		store.appendBlob(blob)
 	}
 	if err == io.EOF {
 		err = nil
@@ -159,6 +167,7 @@ func NewStoreWithLimit(basePath string, maxSegmentSize int) (store *Store, err e
 	store = &Store{
 		basePath:        basePath,
 		blobs:           make([]Blob, 0),
+		sha1ToBlobNo:    make(map[string]int),
 		maxSegmentSize:  maxSegmentSize,
 		cachedSegmentNo: -1,
 	}
@@ -169,9 +178,10 @@ func NewStoreWithLimit(basePath string, maxSegmentSize int) (store *Store, err e
 			return nil, err
 		}
 	}
-	if store.idxFile, err = os.OpenFile(idxPath, os.O_WRONLY|os.O_APPEND, 0644); err != nil {
+	if store.idxFile, err = os.OpenFile(idxPath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err != nil {
 		return nil, err
 	}
+	store.idxCsvWriter = csv.NewWriter(store.idxFile)
 	segmentPath := segmentFilePath(store.basePath, store.currSegmentNo)
 	stat, err := os.Stat(segmentPath)
 	if err != nil {
@@ -187,7 +197,7 @@ func NewStoreWithLimit(basePath string, maxSegmentSize int) (store *Store, err e
 		}
 	} else {
 		store.currSegmentSize = int(stat.Size())
-		store.currSegmentFile, err = os.OpenFile(segmentPath, os.O_APPEND|os.O_RDWR, 0644)
+		store.currSegmentFile, err = os.OpenFile(segmentPath, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			store.Close()
 			return nil, err
@@ -217,13 +227,14 @@ func (store *Store) Close() {
 
 func writeBlobRec(csvWriter *csv.Writer, blob *Blob) error {
 	sha1Str := hex.EncodeToString(blob.sha1[:])
-	rec := []string{
-		sha1Str,
-		strconv.Itoa(blob.nSegment),
-		strconv.Itoa(blob.offset),
-		strconv.Itoa(blob.size),
-	}
-	return csvWriter.Write(rec)
+	rec := [][]string{
+		{
+			sha1Str,
+			strconv.Itoa(blob.nSegment),
+			strconv.Itoa(blob.offset),
+			strconv.Itoa(blob.size),
+		}}
+	return csvWriter.WriteAll(rec)
 }
 
 func (store *Store) Put(d []byte) (id string, err error) {
@@ -266,7 +277,7 @@ func (store *Store) Put(d []byte) (id string, err error) {
 	if err = writeBlobRec(store.idxCsvWriter, &blob); err != nil {
 		return "", err
 	}
-	store.blobs = append(store.blobs, blob)
+	store.appendBlob(blob)
 	return id, nil
 }
 
