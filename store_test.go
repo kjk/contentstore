@@ -9,6 +9,14 @@ import (
 	"github.com/kjk/u"
 )
 
+const (
+	SEGMENT_MAX_SIZE = 100 * 1024       // 100 kB
+	SMALL_BLOB_MAX   = 10 * 1024        // 10 kB
+	BIG_BLOB_MAX     = 200 * 1024       // 200 kB
+	MAX_TO_WRITE     = 20 * 1024 * 1024 // 20 MB
+	//MAX_TO_WRITE = 20 * 1024 // 20 kB
+)
+
 func removeStoreFiles(basePath string) {
 	path := idxFilePath(basePath)
 	os.Remove(path)
@@ -31,28 +39,10 @@ func genRandBytes(rnd *rand.Rand, n int) []byte {
 	return res
 }
 
-func TestStore(t *testing.T) {
-	SEGMENT_MAX_SIZE := 100 * 1024   // 100 kB
-	SMALL_BLOB_MAX := 10 * 1024      // 10 kB
-	BIG_BLOB_MAX := 200 * 1024       // 200 kB
-	MAX_TO_WRITE := 20 * 1024 * 1024 // 20 MB
-	//MAX_TO_WRITE := 20 * 1024 // 20 kB
-	// initialize with known source to get predictable results
-	rnd := rand.New(rand.NewSource(0))
-	basePath := "test"
-	removeStoreFiles(basePath)
-	store, err := NewStoreWithLimit(basePath, SEGMENT_MAX_SIZE)
-	if err != nil {
-		t.Fatalf("NewStoreWithLimit(%q, %d) failed with %q", basePath, SEGMENT_MAX_SIZE, err)
-	}
-	defer func() {
-		if store != nil {
-			store.Close()
-		}
-	}()
+func populate(t *testing.T, store *Store, rnd *rand.Rand, maxWritten int) []string {
 	nWritten := 0
 	blobIds := make([]string, 0)
-	for nWritten < MAX_TO_WRITE {
+	for nWritten < maxWritten {
 		var d []byte
 		isBig := (rnd.Intn(10) == 0) // 10% of the time generate big blob
 		if isBig {
@@ -69,7 +59,12 @@ func TestStore(t *testing.T) {
 		// TODO: test that created segments as expected
 		//fmt.Printf("nWritten: %d\n", nWritten)
 	}
+	return blobIds
+}
+
+func testGet(t *testing.T, store *Store, rnd *rand.Rand, blobIds []string) {
 	var d []byte
+	var err error
 	nBlobs := len(blobIds)
 	for i := 0; i < nBlobs; i++ {
 		// we don't test all blobs due to randomness but testing most of them
@@ -90,8 +85,33 @@ func TestStore(t *testing.T) {
 	if err == nil {
 		t.Fatalf("store.Get(%q) returned nil err, expected an error", k)
 	}
+}
+
+func TestStore(t *testing.T) {
+	// initialize with known source to get predictable results
+	rnd := rand.New(rand.NewSource(0))
+	basePath := "test"
+	removeStoreFiles(basePath)
+	store, err := NewStoreWithLimit(basePath, SEGMENT_MAX_SIZE)
+	if err != nil {
+		t.Fatalf("NewStoreWithLimit(%q, %d) failed with %q", basePath, SEGMENT_MAX_SIZE, err)
+	}
+	defer func() {
+		if store != nil {
+			store.Close()
+		}
+	}()
+	blobIds := populate(t, store, rnd, MAX_TO_WRITE)
+	testGet(t, store, rnd, blobIds)
 	store.Close()
 	store = nil
-	// TODO: re-open and re-test existence
-	// TODO: re-open and add new items
+	store, err = NewStoreWithLimit(basePath, SEGMENT_MAX_SIZE)
+	if err != nil {
+		t.Fatalf("NewStoreWithLimit(%q, %d) failed with %q", basePath, SEGMENT_MAX_SIZE, err)
+	}
+	testGet(t, store, rnd, blobIds)
+	// TODO: add new items
+	store.Close()
+	store = nil
+	removeStoreFiles(basePath)
 }

@@ -172,8 +172,8 @@ func NewStoreWithLimit(basePath string, maxSegmentSize int) (store *Store, err e
 		cachedSegmentNo: -1,
 	}
 	idxPath := idxFilePath(basePath)
-	idxExists := u.PathExists(idxPath)
-	if idxExists {
+	idxDidExist := u.PathExists(idxPath)
+	if idxDidExist {
 		if err = store.readIndex(); err != nil {
 			return nil, err
 		}
@@ -182,6 +182,13 @@ func NewStoreWithLimit(basePath string, maxSegmentSize int) (store *Store, err e
 		return nil, err
 	}
 	store.idxCsvWriter = csv.NewWriter(store.idxFile)
+	if !idxDidExist {
+		rec := [][]string{{idxHdr}}
+		err = store.idxCsvWriter.WriteAll(rec)
+		if err != nil {
+			return nil, err
+		}
+	}
 	segmentPath := segmentFilePath(store.basePath, store.currSegmentNo)
 	stat, err := os.Stat(segmentPath)
 	if err != nil {
