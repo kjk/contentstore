@@ -51,7 +51,7 @@ type Blob struct {
 
 type Store struct {
 	sync.Mutex
-	baseFilePath   string
+	basePath       string
 	maxSegmentSize int
 	blobs          []Blob
 	// sha1ToBlob is to quickly find
@@ -69,12 +69,12 @@ type Store struct {
 	cachedSegmentNo   int
 }
 
-func idxFilePath(baseFilePath string) string {
-	return baseFilePath + "_idx.txt"
+func idxFilePath(basePath string) string {
+	return basePath + "_idx.txt"
 }
 
-func segmentFilePath(baseFilePath string, nSegment int) string {
-	return fmt.Sprintf("%s_%d.txt", baseFilePath, nSegment)
+func segmentFilePath(basePath string, nSegment int) string {
+	return fmt.Sprintf("%s_%d.txt", basePath, nSegment)
 }
 
 func decodeIndexLine(rec []string) (blob Blob, err error) {
@@ -114,7 +114,7 @@ func appendIntIfNotExists(aPtr *[]int, x int) {
 
 func (store *Store) readIndex() error {
 	// at this point idx file must exist
-	fidx, err := os.Open(idxFilePath(store.baseFilePath))
+	fidx, err := os.Open(idxFilePath(store.basePath))
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func (store *Store) readIndex() error {
 	// verify segment files exist
 	// TODO: also verify offset + size is <= size of segment file
 	for _, nSegment := range segments {
-		path := segmentFilePath(store.baseFilePath, nSegment)
+		path := segmentFilePath(store.basePath, nSegment)
 		if !u.PathExists(path) {
 			return errSegmentFileMissing
 		}
@@ -155,14 +155,14 @@ func (store *Store) readIndex() error {
 	return nil
 }
 
-func NewStoreWithLimit(baseFilePath string, maxSegmentSize int) (store *Store, err error) {
+func NewStoreWithLimit(basePath string, maxSegmentSize int) (store *Store, err error) {
 	store = &Store{
-		baseFilePath:    baseFilePath,
+		basePath:        basePath,
 		blobs:           make([]Blob, 0),
 		maxSegmentSize:  maxSegmentSize,
 		cachedSegmentNo: -1,
 	}
-	idxPath := idxFilePath(baseFilePath)
+	idxPath := idxFilePath(basePath)
 	idxExists := u.PathExists(idxPath)
 	if idxExists {
 		if err = store.readIndex(); err != nil {
@@ -172,7 +172,7 @@ func NewStoreWithLimit(baseFilePath string, maxSegmentSize int) (store *Store, e
 	if store.idxFile, err = os.OpenFile(idxPath, os.O_WRONLY|os.O_APPEND, 0644); err != nil {
 		return nil, err
 	}
-	segmentPath := segmentFilePath(store.baseFilePath, store.currSegmentNo)
+	segmentPath := segmentFilePath(store.basePath, store.currSegmentNo)
 	stat, err := os.Stat(segmentPath)
 	if err != nil {
 		// TODO: fail if error is different than "file doesn't exist"
@@ -196,8 +196,8 @@ func NewStoreWithLimit(baseFilePath string, maxSegmentSize int) (store *Store, e
 	return store, nil
 }
 
-func NewStore(baseFilePath string) (*Store, error) {
-	return NewStoreWithLimit(baseFilePath, 10*1024*1024)
+func NewStore(basePath string) (*Store, error) {
+	return NewStoreWithLimit(basePath, 10*1024*1024)
 }
 
 func closeFilePtr(filePtr **os.File) (err error) {
@@ -257,7 +257,7 @@ func (store *Store) Put(d []byte) (id string, err error) {
 		}
 		store.currSegmentNo += 1
 		store.currSegmentSize = 0
-		path := segmentFilePath(store.baseFilePath, store.currSegmentNo)
+		path := segmentFilePath(store.basePath, store.currSegmentNo)
 		store.currSegmentFile, err = os.Create(path)
 		if err != nil {
 			return "", err
@@ -286,7 +286,7 @@ func (store *Store) getSegmentFile(nSegment int) (*os.File, error) {
 		return store.cachedSegmentFile, nil
 	}
 	closeFilePtr(&store.cachedSegmentFile)
-	path := segmentFilePath(store.baseFilePath, nSegment)
+	path := segmentFilePath(store.basePath, nSegment)
 	var err error
 	if store.cachedSegmentFile, err = os.Open(path); err != nil {
 		return nil, err
