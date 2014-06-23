@@ -7,6 +7,13 @@ You can store a []blob of data in the store and retrieve it back using the
 returned unique id (which is a sha1 of the content, but that's implementation
 detail).
 
+
+    // Note: in production code, check the error codes!
+    store, _ := contentstore.NewStore("mystore")
+    id, _ := store.Put([]byte("my piece of content"))
+    v, _ := store.Get(id)
+    store.Close()
+
 The data is de-duplicated (i.e. storing the same blob for the second time is
 a no-op).
 
