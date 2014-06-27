@@ -12,3 +12,5 @@ A sample use:
     store.Close()
 
 Documentation: http://godoc.org/github.com/kjk/contentstore
+
+[![Build Status](https://drone.io/github.com/kjk/contentstore/status.png)](https://drone.io/github.com/kjk/contentstore/latest)
