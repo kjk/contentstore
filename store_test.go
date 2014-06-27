@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"math/rand"
 	"os"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kjk/u"
@@ -39,10 +40,10 @@ func genRandBytes(rnd *rand.Rand, n int) []byte {
 	return res
 }
 
-func populate(t *testing.T, store *Store, rnd *rand.Rand, maxWritten int) []string {
-	nWritten := 0
+func populate(t *testing.T, store *Store, totalWritten *int32, maxToWrite int32) []string {
+	rnd := rand.New(rand.NewSource(0))
 	blobIds := make([]string, 0)
-	for nWritten < maxWritten {
+	for {
 		var d []byte
 		isBig := (rnd.Intn(10) == 0) // 10% of the time generate big blob
 		if isBig {
@@ -55,7 +56,10 @@ func populate(t *testing.T, store *Store, rnd *rand.Rand, maxWritten int) []stri
 			t.Fatalf("store.Put() failed with %q", err)
 		}
 		blobIds = append(blobIds, id)
-		nWritten += len(d)
+		total := atomic.AddInt32(totalWritten, int32(len(d)))
+		if total > maxToWrite {
+			break
+		}
 		// TODO: test that created segments as expected
 		//fmt.Printf("nWritten: %d\n", nWritten)
 	}
@@ -88,8 +92,6 @@ func testGet(t *testing.T, store *Store, rnd *rand.Rand, blobIds []string) {
 }
 
 func TestStore(t *testing.T) {
-	// initialize with known source to get predictable results
-	rnd := rand.New(rand.NewSource(0))
 	basePath := "test"
 	removeStoreFiles(basePath)
 	store, err := NewWithLimit(basePath, SEGMENT_MAX_SIZE)
@@ -101,7 +103,23 @@ func TestStore(t *testing.T) {
 			store.Close()
 		}
 	}()
-	blobIds := populate(t, store, rnd, MAX_TO_WRITE)
+	nWorkers := 5
+	resChan := make(chan []string)
+	var totalWritten int32 = 0
+	for i := 0; i < nWorkers; i++ {
+		go func(c chan []string) {
+			res := populate(t, store, &totalWritten, MAX_TO_WRITE)
+			c <- res
+		}(resChan)
+	}
+	blobIds := make([]string, 0)
+	for i := 0; i < nWorkers; i++ {
+		res := <-resChan
+		//fmt.Printf("worker %d created %d strings\n", i, len(res))
+		blobIds = append(blobIds, res...)
+	}
+	//fmt.Printf("total strings: %d\n", len(blobIds))
+	rnd := rand.New(rand.NewSource(0))
 	testGet(t, store, rnd, blobIds)
 	store.Close()
 	store = nil
