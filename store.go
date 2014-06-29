@@ -54,10 +54,9 @@ type Store struct {
 	basePath       string
 	maxSegmentSize int
 	blobs          []blob
-	// sha1ToBlob is to quickly find
+	// sha1ToBlob is to quickly find a message based on sha1
 	// string is really [20]byte cast to string and int is a position within blobs array
-	// Note: we could try to be a bit smarter about how we
-	sha1ToBlobNo    map[string]int
+	sha1HexToBlobNo map[string]int
 	idxFile         *os.File
 	idxCsvWriter    *csv.Writer
 	currSegmentFile *os.File
@@ -112,12 +111,12 @@ func appendIntIfNotExists(aPtr *[]int, x int) {
 	*aPtr = a
 }
 
-// TODO: error out if already in sha1ToBlobNo
+// TODO: error out if already in sha1HexToBlobNo
 func (store *Store) appendBlob(blob blob) {
-	sha1 := string(blob.sha1[:])
+	sha1 := fmt.Sprintf("%x", blob.sha1[:])
 	blobNo := len(store.blobs)
 	store.blobs = append(store.blobs, blob)
-	store.sha1ToBlobNo[sha1] = blobNo
+	store.sha1HexToBlobNo[sha1] = blobNo
 }
 
 func (store *Store) readIndex() error {
@@ -167,7 +166,7 @@ func NewWithLimit(basePath string, maxSegmentSize int) (store *Store, err error)
 	store = &Store{
 		basePath:        basePath,
 		blobs:           make([]blob, 0),
-		sha1ToBlobNo:    make(map[string]int),
+		sha1HexToBlobNo: make(map[string]int),
 		maxSegmentSize:  maxSegmentSize,
 		cachedSegmentNo: -1,
 	}
@@ -249,8 +248,8 @@ func (store *Store) Put(d []byte) (id string, err error) {
 	defer store.Unlock()
 
 	idBytes := u.Sha1OfBytes(d)
-	id = string(idBytes)
-	if _, ok := store.sha1ToBlobNo[id]; ok {
+	id = fmt.Sprintf("%x", idBytes)
+	if _, ok := store.sha1HexToBlobNo[id]; ok {
 		return id, nil
 	}
 	blob := blob{
@@ -317,7 +316,7 @@ func (store *Store) Get(id string) ([]byte, error) {
 	store.Lock()
 	defer store.Unlock()
 
-	blobNo, ok := store.sha1ToBlobNo[id]
+	blobNo, ok := store.sha1HexToBlobNo[id]
 	if !ok {
 		return nil, errNotFound
 	}

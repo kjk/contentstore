@@ -2,6 +2,7 @@ package contentstore
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/rand"
 	"os"
 	"sync/atomic"
@@ -79,9 +80,9 @@ func testGet(t *testing.T, store *Store, rnd *rand.Rand, blobIds []string) {
 		if err != nil {
 			t.Fatalf("store.Get(%q) failed with %q, i: %d, sha1: %s", id, err, i, hex.EncodeToString([]byte(id)))
 		}
-		sha1 := string(u.Sha1OfBytes(d))
-		if sha1 != id {
-			t.Fatalf("store.Get() returned bad content, id is %x while sha1 is %x, should be same", []byte(id), []byte(sha1))
+		sha1Hex := fmt.Sprintf("%x", u.Sha1OfBytes(d))
+		if sha1Hex != id {
+			t.Fatalf("store.Get() returned bad content, id is %s while sha1 is %s, should be same", id, sha1Hex)
 		}
 	}
 	k := "non-existint"
