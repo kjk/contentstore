@@ -121,27 +121,27 @@ func (store *Store) appendBlob(blob blob) {
 
 func (store *Store) readIndex() error {
 	// at this point idx file must exist
-	fidx, err := os.Open(idxFilePath(store.basePath))
+	file, err := os.Open(idxFilePath(store.basePath))
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 	// TODO: would be faster (and easier?) to use a bitset since we know
 	// segment numbers are consequitive integers
 	segments := make([]int, 0)
-	csvReader := csv.NewReader(fidx)
+	csvReader := csv.NewReader(file)
 	csvReader.Comma = ','
 	csvReader.FieldsPerRecord = -1
 	rec, err := csvReader.Read()
 	if err != nil || len(rec) != 1 || rec[0] != idxHdr {
 		return errInvalidIndexHdr
 	}
+	var blob blob
 	for {
-		rec, err = csvReader.Read()
-		if err != nil {
+		if rec, err = csvReader.Read(); err != nil {
 			break
 		}
-		blob, err := decodeIndexLine(rec)
-		if err != nil {
+		if blob, err = decodeIndexLine(rec); err != nil {
 			break
 		}
 		appendIntIfNotExists(&segments, blob.nSegment)
